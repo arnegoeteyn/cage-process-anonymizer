@@ -1,3 +1,6 @@
 git+https://github.com/datavillage-me/dv-utils@main#egg=dv-utils
 pandas
 openpyxl
+presidio_analyzer
+presidio_anonymizer
+spacy download en_core_web_lg  
