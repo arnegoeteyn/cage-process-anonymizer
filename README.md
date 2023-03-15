@@ -1,8 +1,22 @@
-# Template for a process to be deployed in the data cage
+# Template for a process to be deployed in the datacage
 
-This is a sample project with a representative set of resources to deploy a data processing algorithm in a Datavillage cage.
+Example implementing a CSV analyzer in a confidential computing environment
 
-__TL;DR__ : clone this repo and edit the `process.py` file
+This example shows how to use the Presidio Analyzer and Anonymizer
+to detect and anonymize PII in a CSV file.
+It uses the BatchAnalyzerEngine to analyze the CSV file, and the
+BatchAnonymizerEngine to anonymize the requested columns.
+Note that currently BatchAnonymizerEngine is not part of the anonymizer package,
+and is defined in this and the batch_processing notebook.
+https://github.com/microsoft/presidio/blob/main/docs/samples/python/batch_processing.ipynb
+
+Content of csv file:
+id,name,city,comments
+1,John,New York,called him yesterday to confirm he requested to call back in 2 days
+2,Jill,Los Angeles,accepted the offer license number AC432223
+3,Jack,Chicago,need to call him at phone number 212-555-5555
+
+"""
 
 ## Content of this repo
 Apart from this file, this repo contains :
@@ -34,8 +48,8 @@ When starting the docker container, the following environment variables are made
 | DV_URL |       |
 | REDIS_SERVICE_HOST |       |
 | REDIS_SERVICE_PORT |       |
-| STOCK_XL_PATH | OPTIONAL; used in the stock quote demo.  Is the path to an xlsx file with a "symbol" column, listing the stocks that we want to get quotes for |
-| FMP_API_KEY | OPTIONAL; used in the stock quote demo.  API key to financialmodelingprep.com api |
+| PII_CSV_PATH | OPTIONAL; file from data provider containing PII data |
+| PII_CSV_ANONYMIZED_PATH | OPTIONAL; File without PII data created as output to data consumer |
 
 The process execution is event-driven : triggering events are sent on a local Redis queue; the executable should 
 subscribe to that queue and handle events appropriately.
