@@ -155,7 +155,8 @@ def update_quote_event_processor(evt: dict):
 
    anonymizer = BatchAnonymizerEngine()
    anonymized_results = anonymizer.anonymize_dict(analyzer_results)
-   logger.info(f"Write anonymized output file at {os.environ.get("PII_CSV_ANONYMIZED_PATH", "")}")
+   fileLocation=os.environ.get("PII_CSV_ANONYMIZED_PATH", "")
+   logger.info(f"Write anonymized output file at {fileLocation}")
    with open(os.environ.get("PII_CSV_ANONYMIZED_PATH", ""), 'w', newline='') as file:
         for key in anonymized_results.keys():
             file.write("%s,%s\n"%(key,anonymized_results[key]))
