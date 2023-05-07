@@ -1,4 +1,5 @@
 git+https://github.com/datavillage-me/dv-utils@main#egg=dv-utils
+delta_sharing
 pandas
 openpyxl
 presidio_analyzer
