@@ -4,6 +4,7 @@ import requests
 import os
 import pandas as pd
 from dv_utils import default_settings, Client
+import delta_sharing
 
 import csv
 import pprint
@@ -57,6 +58,25 @@ class CSVAnalyzer(BatchAnalyzerEngine):
             analyzer_results = self.analyze_dict(csv_dict, language, keys_to_skip)
             return list(analyzer_results)
 
+class ParquetAnalyzer(BatchAnalyzerEngine):
+    def analyze_parquet(
+        self,
+        profile_file_full_path: str,
+        shared_table_url: str,
+        language: str,
+        keys_to_skip: Optional[List[str]] = None,
+        **kwargs,
+    ) -> Iterable[DictAnalyzerResult]:
+
+        # Point to the profile file. It can be a file on the local file system or a file on a remote storage.
+        profile_file = profile_file_full_path
+        table_url = profile_file_full_path + shared_table_url
+        data = delta_sharing.load_as_pandas(table_url)
+        frame_list = data.values.tolist()
+        frame_dict = {header: list(map(str, values)) for header, *values in zip(*frame_list)}
+        analyzer_results = self.analyze_dict(frame_dict, language, keys_to_skip)
+        return list(analyzer_results)
+        
 
 class BatchAnonymizerEngine(AnonymizerEngine):
     """
@@ -133,7 +153,7 @@ def event_processor(evt: dict):
         evt_type =evt.get("type", "")
         if(evt_type == "ANONYMISE"):
            logger.info(f"use the anonymise event processor")
-           update_quote_event_processor(evt)
+           update_quote_event_processor_delta_share(evt)
 
     # pylint: disable=broad-except
     except Exception as err:
@@ -158,5 +178,31 @@ def update_quote_event_processor(evt: dict):
    fileLocation=os.environ.get("PII_CSV_ANONYMIZED_PATH", "")
    logger.info(f"Write anonymized output file at {fileLocation}")
    with open(os.environ.get("PII_CSV_ANONYMIZED_PATH", ""), 'w', newline='') as file:
+        for key in anonymized_results.keys():
+            file.write("%s,%s\n"%(key,anonymized_results[key]))
+
+def update_quote_event_processor_delta_share(evt: dict):
+   client = Client()
+
+   DELTA_SHARE_PROFILE_PATH = os.environ.get("DELTA_SHARE_PROFILE_PATH", "")
+   #DELTA_SHARE_PROFILE_PATH=os.path.dirname(__file__) + "/open-datasets.share"
+   if(not DELTA_SHARE_PROFILE_PATH):
+       raise RuntimeError("DELTA_SHARE_PROFILE_PATH environment variable is not defined")
+
+   DELTA_SHARE_TABLE_URL = os.environ.get("DELTA_SHARE_TABLE_URL", "")
+   #DELTA_SHARE_TABLE_URL= "#pii-share.default.pii-dataset"
+   if(not DELTA_SHARE_TABLE_URL):
+       raise RuntimeError("DELTA_SHARE_TABLE_URL environment variable is not defined")
+   
+   analyzer = ParquetAnalyzer()
+   analyzer_results = analyzer.analyze_parquet(DELTA_SHARE_PROFILE_PATH,DELTA_SHARE_TABLE_URL,
+                                            language="en")
+
+   anonymizer = BatchAnonymizerEngine()
+   anonymized_results = anonymizer.anonymize_dict(analyzer_results)
+   fileLocation=os.environ.get("PII_CSV_ANONYMIZED_PATH", "")
+   #fileLocation="./pii_file_anonymised.csv"
+   logger.info(f"Write anonymized output file at {fileLocation}")
+   with open(fileLocation, 'w', newline='') as file:
         for key in anonymized_results.keys():
             file.write("%s,%s\n"%(key,anonymized_results[key]))
