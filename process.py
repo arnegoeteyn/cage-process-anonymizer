@@ -69,8 +69,9 @@ class ParquetAnalyzer(BatchAnalyzerEngine):
     ) -> Iterable[DictAnalyzerResult]:
 
         # Point to the profile file. It can be a file on the local file system or a file on a remote storage.
-        profile_file = profile_file_full_path
+        profile_file = os.path.dirname(__file__) + profile_file_full_path
         table_url = profile_file_full_path + shared_table_url
+        logger.info(f"Point to the profile file. at {table_url}")
         data = delta_sharing.load_as_pandas(table_url)
         frame_list = data.values.tolist()
         frame_dict = {header: list(map(str, values)) for header, *values in zip(*frame_list)}
