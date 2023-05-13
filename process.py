@@ -44,7 +44,7 @@ def calculate_score(
             try:
                 qte=row['quantity']
                 ticker=row['ticker_symbol']
-                url = (f"https://financialmodelingprep.com/api/v4/esg-environmental-social-governance-data?symbol={ticker}&apikey={apiKey}")
+                url = (f"http://financialmodelingprep.com/api/v4/esg-environmental-social-governance-data?symbol={ticker}&apikey={apiKey}")
                 esg_json=get_jsonparsed_data(url)
                 totalJson['totalQte']=totalJson['totalQte']+int(qte)
                 environmentalScore=esg_json[0]['environmentalScore']
