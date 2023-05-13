@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from urllib.request import urlopen
 import certifi
+import ssl
 import json
 from dv_utils import default_settings, Client
 import delta_sharing
@@ -31,7 +32,7 @@ def get_jsonparsed_data(url):
     -------
     dict
     """
-    response = urlopen(url, cafile=certifi.where())
+    response = urlopen(url)
     data = response.read().decode("utf-8")
     return json.loads(data)
 
@@ -85,7 +86,7 @@ def event_processor(evt: dict):
 
         evt_type =evt.get("type", "")
         if(evt_type == "CALCULATE_ESG_SCORE"):
-           logger.info(f"use the anonymise event processor")
+           logger.info(f"use the calculate_esg_score event processor")
            update_quote_event_processor_delta_share(evt)
 
     # pylint: disable=broad-except
