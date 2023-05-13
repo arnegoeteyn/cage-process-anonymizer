@@ -84,7 +84,7 @@ def event_processor(evt: dict):
 
 def update_quote_event_processor(evt: dict):
     client = Client()
-    API_KEY="586e328526b6e172fe4a25e02c6624b8"
+   
     #API_KEY=os.environ.get("API_KEY", "")
     PORTFOLIO_CSV_ENTITY_BE_PATH=os.path.dirname(__file__) + "/portfolios_entity-be.csv"
     df = pd.read_csv(PORTFOLIO_CSV_ENTITY_BE_PATH) #give the full path of file downloaded
@@ -120,7 +120,7 @@ def update_quote_event_processor(evt: dict):
 def update_quote_event_processor_delta_share(evt: dict):
    client = Client()
    API_KEY=os.environ.get("API_KEY", "")
-   #API_KEY="586e328526b6e172fe4a25e02c6624b8"
+   
 
    DELTA_SHARE_PROFILE_PATH = os.environ.get("DELTA_SHARE_PROFILE_PATH", "")
    #DELTA_SHARE_PROFILE_PATH="./open-datasets.share"
@@ -149,7 +149,7 @@ def update_quote_event_processor_delta_share(evt: dict):
    
    fileLocation=os.environ.get("ESG_TOTAL_SCORE_PATH", "")
    #fileLocation="./esg-total-score.json"
-   logger.info(f"Write anonymized output file at {fileLocation}")
+   logger.info(f"Write Esg Total Score output file at {fileLocation}")
    averageJson={'totalESGScore':totalJson['totalESGScore']/totalJson['totalQte'],'totalEnvironmentalScore':totalJson['totalEnvironmentalScore']/totalJson['totalQte'],'totalSocialScore':totalJson['totalSocialScore']/totalJson['totalQte'],'totalGovernanceScore':totalJson['totalGovernanceScore']/totalJson['totalQte']}
    with open(fileLocation, 'w', newline='') as file:
        file.write(json.dumps(averageJson))
