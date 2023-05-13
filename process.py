@@ -3,36 +3,13 @@ import time
 import requests
 import os
 import pandas as pd
+from urllib.request import urlopen
+import certifi
+import json
 from dv_utils import default_settings, Client
 import delta_sharing
 
-import csv
-import pprint
-import collections
-from typing import List, Iterable, Optional, Union, Dict
 
-from presidio_analyzer import AnalyzerEngine, BatchAnalyzerEngine, RecognizerResult, DictAnalyzerResult
-from presidio_anonymizer import AnonymizerEngine
-from presidio_anonymizer.entities import EngineResult
-
-"""
-Example implementing a CSV analyzer
-
-This example shows how to use the Presidio Analyzer and Anonymizer
-to detect and anonymize PII in a CSV file.
-It uses the BatchAnalyzerEngine to analyze the CSV file, and the
-BatchAnonymizerEngine to anonymize the requested columns.
-Note that currently BatchAnonymizerEngine is not part of the anonymizer package,
-and is defined in this and the batch_processing notebook.
-https://github.com/microsoft/presidio/blob/main/docs/samples/python/batch_processing.ipynb
-
-Content of csv file:
-id,name,city,comments
-1,John,New York,called him yesterday to confirm he requested to call back in 2 days
-2,Jill,Los Angeles,accepted the offer license number AC432223
-3,Jack,Chicago,need to call him at phone number 212-555-5555
-
-"""
 
 logger = logging.getLogger(__name__)
 
@@ -42,104 +19,59 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
-class CSVAnalyzer(BatchAnalyzerEngine):
+def get_jsonparsed_data(url):
+    """
+    Receive the content of ``url``, parse it as JSON and return the object.
 
-    def analyze_csv(
-        self,
-        csv_full_path: str,
-        language: str,
-        keys_to_skip: Optional[List[str]] = None,
-        **kwargs,
-    ) -> Iterable[DictAnalyzerResult]:
+    Parameters
+    ----------
+    url : str
 
-        with open(csv_full_path, 'r') as csv_file:
-            csv_list = list(csv.reader(csv_file))
-            csv_dict = {header: list(map(str, values)) for header, *values in zip(*csv_list)}
-            analyzer_results = self.analyze_dict(csv_dict, language, keys_to_skip)
-            return list(analyzer_results)
+    Returns
+    -------
+    dict
+    """
+    response = urlopen(url, cafile=certifi.where())
+    data = response.read().decode("utf-8")
+    return json.loads(data)
 
-class ParquetAnalyzer(BatchAnalyzerEngine):
-    def analyze_parquet(
-        self,
+def load_parquet(
         profile_file_full_path: str,
-        shared_table_url: str,
-        language: str,
-        keys_to_skip: Optional[List[str]] = None,
-        **kwargs,
-    ) -> Iterable[DictAnalyzerResult]:
+        shared_table_url: str
+    ):
 
         # Point to the profile file. It can be a file on the local file system or a file on a remote storage.
         profile_file = os.path.dirname(__file__) + profile_file_full_path
         table_url = profile_file_full_path + shared_table_url
         logger.info(f"Point to the profile file. at {table_url}")
         data = delta_sharing.load_as_pandas(table_url)
-        frame_list = data.values.tolist()
-        frame_dict = {header: list(map(str, values)) for header, *values in zip(*frame_list)}
-        analyzer_results = self.analyze_dict(frame_dict, language, keys_to_skip)
-        return list(analyzer_results)
-        
+        return data
 
-class BatchAnonymizerEngine(AnonymizerEngine):
-    """
-    Class inheriting from the AnonymizerEngine and adding additional functionality 
-    for anonymizing lists or dictionaries.
-    """
+def calculate_score(
+        df,
+        apiKey: str,
+        totalJson
+    ):
+        index_tickers = df['ticker_symbol'].tolist() #assigning all tickers to a list
+        for index, row in df.iterrows():
+            try:
+                qte=row['quantity']
+                ticker=row['ticker_symbol']
+                url = (f"https://financialmodelingprep.com/api/v4/esg-environmental-social-governance-data?symbol={ticker}&apikey={apiKey}")
+                esg_json=get_jsonparsed_data(url)
+                totalJson['totalQte']=totalJson['totalQte']+int(qte)
+                environmentalScore=esg_json[0]['environmentalScore']
+                totalJson['totalEnvironmentalScore']=totalJson['totalEnvironmentalScore']+int(qte)*float(environmentalScore)
+                socialScore=esg_json[0]['socialScore']
+                totalJson['totalSocialScore']=totalJson['totalSocialScore']+int(qte)*float(socialScore)
+                governanceScore=esg_json[0]['governanceScore']
+                totalJson['totalGovernanceScore']=totalJson['totalGovernanceScore']+int(qte)*float(governanceScore)
+                ESGScore=esg_json[0]['ESGScore']
+                totalJson['totalESGScore']=totalJson['totalESGScore']+int(qte)*float(ESGScore)
+            except IndexError:
+                logger.info(f"Error getting financial data for ticker: {ticker}")
+        return totalJson
 
-    def anonymize_list(
-        self,
-        texts:List[Union[str, bool, int, float]], 
-        recognizer_results_list: List[List[RecognizerResult]], 
-        **kwargs
-    ) -> List[EngineResult]:
-        """
-        Anonymize a list of strings.
-
-        :param texts: List containing the texts to be anonymized (original texts)
-        :param recognizer_results_list: A list of lists of RecognizerResult,
-        the output of the AnalyzerEngine on each text in the list.
-        :param kwargs: Additional kwargs for the `AnonymizerEngine.anonymize` method
-        """
-        return_list = []
-        if not recognizer_results_list:
-            recognizer_results_list = [[] for _ in range(len(texts))]
-        for text, recognizer_results in zip(texts, recognizer_results_list):
-            if type(text) in (str, bool, int, float):
-                res = self.anonymize(text=str(text), analyzer_results=recognizer_results, **kwargs)
-                return_list.append(res.text)
-            else:
-                return_list.append(text)
-
-        return return_list
-
-    def anonymize_dict(self, analyzer_results: Iterable[DictAnalyzerResult], **kwargs) -> Dict[str, str]:
-
-        """
-        Anonymize values in a dictionary.
-
-        :param analyzer_results: Iterator of `DictAnalyzerResult` 
-        containing the output of the AnalyzerEngine.analyze_dict on the input text.
-        :param kwargs: Additional kwargs for the `AnonymizerEngine.anonymize` method
-        """
-
-        return_dict = {}
-        for result in analyzer_results:
-
-            if isinstance(result.value, dict):
-                resp = self.anonymize_dict(analyzer_results = result.recognizer_results, **kwargs)
-                return_dict[result.key] = resp
-
-            elif isinstance(result.value, str):
-                resp = self.anonymize(text=result.value, analyzer_results=result.recognizer_results, **kwargs)
-                return_dict[result.key] = resp.text
-
-            elif isinstance(result.value, collections.abc.Iterable):
-                anonymize_respones = self.anonymize_list(texts=result.value,
-                                                         recognizer_results_list=result.recognizer_results, 
-                                                         **kwargs)
-                return_dict[result.key] = anonymize_respones 
-            else:
-                return_dict[result.key] = result.value
-        return return_dict
 
 # define an event processing function
 def event_processor(evt: dict):
@@ -152,7 +84,7 @@ def event_processor(evt: dict):
         logger.info(f"Processing event {evt}")
 
         evt_type =evt.get("type", "")
-        if(evt_type == "ANONYMISE"):
+        if(evt_type == "CALCULATE_ESG_SCORE"):
            logger.info(f"use the anonymise event processor")
            update_quote_event_processor_delta_share(evt)
 
@@ -164,46 +96,75 @@ def event_processor(evt: dict):
 
 
 def update_quote_event_processor(evt: dict):
-   client = Client()
+    client = Client()
+    API_KEY="586e328526b6e172fe4a25e02c6624b8"
+    #API_KEY=os.environ.get("API_KEY", "")
+    PORTFOLIO_CSV_ENTITY_BE_PATH=os.path.dirname(__file__) + "/portfolios_entity-be.csv"
+    df = pd.read_csv(PORTFOLIO_CSV_ENTITY_BE_PATH) #give the full path of file downloaded
+    index_tickers = df['ticker_symbol'].tolist() #assigning all tickers to a list
+    totalEnvironmentalScore=0
+    totalSocialScore=0
+    totalGovernanceScore=0
+    totalESGScore=0
+    totalQte=0
+    for index, row in df.iterrows():
+       qte=row['quantity']
+       ticker=row['ticker_symbol']
+       url = (f"https://financialmodelingprep.com/api/v4/esg-environmental-social-governance-data?symbol={ticker}&apikey={API_KEY}")
+       esg_json=get_jsonparsed_data(url)
+       totalQte=totalQte+qte
+       environmentalScore=esg_json[0]['environmentalScore']
+       totalEnvironmentalScore=totalEnvironmentalScore+qte*environmentalScore
+       socialScore=esg_json[0]['socialScore']
+       totalSocialScore=totalSocialScore+qte*socialScore
+       governanceScore=esg_json[0]['governanceScore']
+       totalGovernanceScore=totalGovernanceScore+qte*governanceScore
+       ESGScore=esg_json[0]['ESGScore']
+       totalESGScore=totalESGScore+qte*ESGScore
+    #fileLocation=os.environ.get("ESG_TOTAL_SCORE_PATH", "")
+    fileLocation="./esg-total-score.json"
+    logger.info(f"Write anonymized output file at {fileLocation}")
+    totalJson={'totalESGScore':totalESGScore/totalQte,'totalEnvironmentalScore':totalEnvironmentalScore/totalQte,'totalSocialScore':totalSocialScore/totalQte,'totalGovernanceScore':totalGovernanceScore/totalQte}
+    with open(fileLocation, 'w', newline='') as file:
+        file.write(json.dumps(totalJson))
 
-   PII_CSV_PATH = os.environ.get("PII_CSV_PATH", "")
-   if(not PII_CSV_PATH):
-       raise RuntimeError("PII_CSV_PATH environment variable is not defined")
-   
-   analyzer = CSVAnalyzer()
-   analyzer_results = analyzer.analyze_csv(PII_CSV_PATH,
-                                            language="en")
 
-   anonymizer = BatchAnonymizerEngine()
-   anonymized_results = anonymizer.anonymize_dict(analyzer_results)
-   fileLocation=os.environ.get("PII_CSV_ANONYMIZED_PATH", "")
-   logger.info(f"Write anonymized output file at {fileLocation}")
-   with open(os.environ.get("PII_CSV_ANONYMIZED_PATH", ""), 'w', newline='') as file:
-        for key in anonymized_results.keys():
-            file.write("%s,%s\n"%(key,anonymized_results[key]))
 
 def update_quote_event_processor_delta_share(evt: dict):
    client = Client()
+   API_KEY=os.environ.get("API_KEY", "")
+   #API_KEY="586e328526b6e172fe4a25e02c6624b8"
 
    DELTA_SHARE_PROFILE_PATH = os.environ.get("DELTA_SHARE_PROFILE_PATH", "")
-   #DELTA_SHARE_PROFILE_PATH=os.path.dirname(__file__) + "/open-datasets.share"
+   #DELTA_SHARE_PROFILE_PATH="./open-datasets.share"
    if(not DELTA_SHARE_PROFILE_PATH):
        raise RuntimeError("DELTA_SHARE_PROFILE_PATH environment variable is not defined")
-
-   DELTA_SHARE_TABLE_URL = os.environ.get("DELTA_SHARE_TABLE_URL", "")
-   #DELTA_SHARE_TABLE_URL= "#pii-share.default.pii-dataset"
-   if(not DELTA_SHARE_TABLE_URL):
-       raise RuntimeError("DELTA_SHARE_TABLE_URL environment variable is not defined")
    
-   analyzer = ParquetAnalyzer()
-   analyzer_results = analyzer.analyze_parquet(DELTA_SHARE_PROFILE_PATH,DELTA_SHARE_TABLE_URL,
-                                            language="en")
+   DELTA_SHARE_TABLE_ENTITY_BE_URL = os.environ.get("DELTA_SHARE_TABLE_ENTITY_BE_URL", "")
+   #DELTA_SHARE_TABLE_ENTITY_BE_URL="#delta-portfolios-entity-be.default.delta-portfolios-entity-be-dataset"
+   if(not DELTA_SHARE_TABLE_ENTITY_BE_URL):
+       raise RuntimeError("DELTA_SHARE_TABLE_ENTITY_BE_URL environment variable is not defined")
 
-   anonymizer = BatchAnonymizerEngine()
-   anonymized_results = anonymizer.anonymize_dict(analyzer_results)
-   fileLocation=os.environ.get("PII_CSV_ANONYMIZED_PATH", "")
-   #fileLocation="./pii_file_anonymised.csv"
+   DELTA_SHARE_TABLE_ENTITY_LU_URL = os.environ.get("DELTA_SHARE_TABLE_ENTITY_LU_URL", "")
+   #DELTA_SHARE_TABLE_ENTITY_LU_URL="#delta-portfolios-entity-lu.default.delta-portfolios-entity-lu-dataset"
+   if(not DELTA_SHARE_TABLE_ENTITY_LU_URL):
+       raise RuntimeError("DELTA_SHARE_TABLE_ENTITY_LU_URL environment variable is not defined")
+   
+   totalJson={'totalQte':0,'totalESGScore':0,'totalEnvironmentalScore':0,'totalSocialScore':0,'totalGovernanceScore':0}
+   
+   #calculate for ENTITY_BE customers
+   df=load_parquet(DELTA_SHARE_PROFILE_PATH,DELTA_SHARE_TABLE_ENTITY_BE_URL)  
+   totalJson=calculate_score(df,API_KEY,totalJson)
+
+   #calculate for ENTITY_LU customers
+   df=load_parquet(DELTA_SHARE_PROFILE_PATH,DELTA_SHARE_TABLE_ENTITY_LU_URL)  
+   totalJson=calculate_score(df,API_KEY,totalJson)
+   
+   fileLocation=os.environ.get("ESG_TOTAL_SCORE_PATH", "")
+   #fileLocation="./esg-total-score.json"
    logger.info(f"Write anonymized output file at {fileLocation}")
+   averageJson={'totalESGScore':totalJson['totalESGScore']/totalJson['totalQte'],'totalEnvironmentalScore':totalJson['totalEnvironmentalScore']/totalJson['totalQte'],'totalSocialScore':totalJson['totalSocialScore']/totalJson['totalQte'],'totalGovernanceScore':totalJson['totalGovernanceScore']/totalJson['totalQte']}
    with open(fileLocation, 'w', newline='') as file:
-        for key in anonymized_results.keys():
-            file.write("%s,%s\n"%(key,anonymized_results[key]))
+       file.write(json.dumps(averageJson))
+
+

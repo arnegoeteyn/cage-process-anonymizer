@@ -2,7 +2,5 @@ git+https://github.com/datavillage-me/dv-utils@main#egg=dv-utils
 delta_sharing
 pandas
 openpyxl
-presidio_analyzer
-presidio_anonymizer
-spacy >=3.5.0,<3.6.0
-https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.5.0/en_core_web_lg-3.5.0.tar.gz
+certifi
+json

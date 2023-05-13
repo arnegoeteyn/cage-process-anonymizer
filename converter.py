@@ -1,8 +1,8 @@
 import pandas as pd
 from pyspark.sql import SparkSession
 
-df = pd.read_csv('pii_file.csv')
-df.to_parquet('pii_file.parquet')
+df = pd.read_csv('portfolios_entity-lu.csv')
+df.to_parquet('portfolios_entity-lu.parquet')
 
 
 spark = (
@@ -13,5 +13,5 @@ spark = (
     .config("spark.delta.logStore.class", "org.apache.spark.sql.delta.storage.S3SingleDriverLogStore")
     .getOrCreate()
 )
-df = spark.read.format("csv").option("header", True).load("pii_file.csv")
-df.write.format("delta").save("delta")
+df = spark.read.format("csv").option("header", True).load("portfolios_entity-lu.csv")
+df.write.format("delta").save("delta-portfolios_entity-lu")
