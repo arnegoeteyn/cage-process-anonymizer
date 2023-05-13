@@ -3,9 +3,7 @@ import time
 import requests
 import os
 import pandas as pd
-from urllib.request import urlopen
-import certifi
-import ssl
+import requests
 import json
 from dv_utils import default_settings, Client
 import delta_sharing
@@ -21,20 +19,8 @@ logging.basicConfig(
 )
 
 def get_jsonparsed_data(url):
-    """
-    Receive the content of ``url``, parse it as JSON and return the object.
-
-    Parameters
-    ----------
-    url : str
-
-    Returns
-    -------
-    dict
-    """
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
-    return json.loads(data)
+    response = requests.get(url)
+    return response.json()
 
 def load_parquet(
         profile_file_full_path: str,
