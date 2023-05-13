@@ -3,4 +3,3 @@ delta_sharing
 pandas
 openpyxl
 certifi
-json
