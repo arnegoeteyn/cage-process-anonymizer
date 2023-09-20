@@ -1,4 +1,6 @@
-git+https://github.com/datavillage-me/dv-utils@main#egg=dv-utils
 delta_sharing @ git+https://github.com/delta-io/delta-sharing@main#&subdirectory=python
+pandas
+openpyxl
+dv-utils>=0.2.1
 pandas
 openpyxl

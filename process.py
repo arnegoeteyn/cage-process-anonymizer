@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import requests
 import json
-from dv_utils import default_settings, Client
+from dv_utils import default_settings, Client, audit_log 
 import delta_sharing
 
 
@@ -64,7 +64,9 @@ def calculate_score(
 def event_processor(evt: dict):
     """
     Process an incoming event
+    Exception raised by this function are handled by the default event listener and reported in the logs.
     """
+    logger.info(f"Processing event {evt}")
     start = time.time()
 
     try:
@@ -80,7 +82,9 @@ def event_processor(evt: dict):
         logger.error(f"Failed processing event: {err}")
     finally:
         logger.info(f"Processed event in {time.time() - start:.{3}f}s")
-
+    
+def generic_event_processor(evt: dict):
+    pass
 
 def update_quote_event_processor(evt: dict):
     client = Client()
@@ -153,5 +157,3 @@ def update_quote_event_processor_delta_share(evt: dict):
    averageJson={'totalESGScore':totalJson['totalESGScore']/totalJson['totalQte'],'totalEnvironmentalScore':totalJson['totalEnvironmentalScore']/totalJson['totalQte'],'totalSocialScore':totalJson['totalSocialScore']/totalJson['totalQte'],'totalGovernanceScore':totalJson['totalGovernanceScore']/totalJson['totalQte']}
    with open(fileLocation, 'w', newline='') as file:
        file.write(json.dumps(averageJson))
-
-
